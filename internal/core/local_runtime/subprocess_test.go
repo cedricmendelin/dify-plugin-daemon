@@ -23,6 +23,41 @@ func pluginEnvSliceToMap(t *testing.T, env []string) map[string]string {
 	return envByKey
 }
 
+func assertAzureOpenAIReadTimeoutEnv(t *testing.T, buildEnv func(*testing.T) []string) {
+	t.Helper()
+	t.Setenv("AZURE_OPENAI_API_KEY", "must-not-be-inherited")
+
+	for _, tt := range []struct {
+		name    string
+		value   string
+		present bool
+	}{
+		{name: "numeric", value: "600.5", present: true},
+		{name: "unset"},
+		{name: "empty", present: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("AZURE_OPENAI_READ_TIMEOUT", tt.value)
+			if !tt.present {
+				require.NoError(t, os.Unsetenv("AZURE_OPENAI_READ_TIMEOUT"))
+			}
+
+			envByKey := pluginEnvSliceToMap(t, buildEnv(t))
+			value, present := envByKey["AZURE_OPENAI_READ_TIMEOUT"]
+			require.Equal(t, tt.present, present)
+			require.Equal(t, tt.value, value)
+			for _, key := range []string{
+				"AZURE_OPENAI_API_KEY",
+				"DB_PASSWORD",
+				"SERVER_KEY",
+				"DIFY_INNER_API_KEY",
+			} {
+				require.NotContains(t, envByKey, key)
+			}
+		})
+	}
+}
+
 func TestBuildPluginCommandEnv(t *testing.T) {
 	t.Setenv("PATH", "/test/bin")
 	t.Setenv("HOME", "/test/home")
@@ -67,6 +102,13 @@ func TestBuildPluginCommandEnv(t *testing.T) {
 	} {
 		require.NotContains(t, envByKey, key)
 	}
+
+	assertAzureOpenAIReadTimeoutEnv(t, func(t *testing.T) []string {
+		return BuildPluginCommandEnv(&app.Config{
+			HttpsProxy: "https://config-proxy:8443",
+			NoProxy:    "localhost,127.0.0.1",
+		})
+	})
 }
 
 func TestGetInstanceCmdDoesNotInheritDaemonEnv(t *testing.T) {
@@ -95,4 +137,10 @@ func TestGetInstanceCmdDoesNotInheritDaemonEnv(t *testing.T) {
 	require.NotContains(t, envByKey, "DB_PASSWORD")
 	require.NotContains(t, envByKey, "SERVER_KEY")
 	require.NotContains(t, envByKey, "DIFY_INNER_API_KEY")
+
+	assertAzureOpenAIReadTimeoutEnv(t, func(t *testing.T) []string {
+		cmd, err := r.getInstanceCmd()
+		require.NoError(t, err)
+		return cmd.Env
+	})
 }

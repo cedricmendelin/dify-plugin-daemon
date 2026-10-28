@@ -53,6 +53,7 @@ var pluginCommandEnvAllowlist = []string{
 	"TZ",
 	"SSL_CERT_FILE",
 	"REQUESTS_CA_BUNDLE",
+	"AZURE_OPENAI_READ_TIMEOUT",
 	"HTTP_PROXY",
 	"HTTPS_PROXY",
 	"NO_PROXY",
